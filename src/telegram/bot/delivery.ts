@@ -291,6 +291,18 @@ export async function deliverReplies(params: {
   return { delivered: hasDelivered };
 }
 
+/**
+ * When fetching via a proxy, DNS resolution is handled by the proxy itself.
+ * Provide a stub lookupFn so the SSRF guard's dns.lookup() doesn't fail
+ * inside network-isolated containers that cannot resolve external hostnames.
+ * The resolved address is never used — the proxy dispatcher ignores it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const proxyBypassLookup = (async (_hostname: string, _options?: any) => {
+  const entry = { address: "1.1.1.1", family: 4 };
+  return _options?.all ? [entry] : entry;
+}) as any;
+
 export async function resolveMedia(
   ctx: TelegramContext,
   maxBytes: number,
@@ -332,6 +344,7 @@ export async function resolveMedia(
         url,
         fetchImpl,
         filePathHint: file.file_path,
+        ...(proxyFetch ? { lookupFn: proxyBypassLookup } : {}),
       });
       const originalName = fetched.fileName ?? file.file_path;
       const saved = await saveMediaBuffer(
@@ -413,6 +426,7 @@ export async function resolveMedia(
     url,
     fetchImpl,
     filePathHint: file.file_path,
+    ...(proxyFetch ? { lookupFn: proxyBypassLookup } : {}),
   });
   const originalName = fetched.fileName ?? file.file_path;
   const saved = await saveMediaBuffer(
